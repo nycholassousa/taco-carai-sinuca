@@ -1,0 +1,36 @@
+#!/bin/sh
+# Pre-commit: checks only staged files.
+MAX_LINES=250
+MAX_BYTES=10485760
+fail=0
+
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+
+for f in $files; do
+  [ -f "$f" ] || continue
+
+  case "$f" in
+    *.gd)
+      n=$(wc -l < "$f" | tr -d ' ')
+      if [ "$n" -gt "$MAX_LINES" ]; then
+        echo "ERRO: $f tem $n linhas (max $MAX_LINES)"; fail=1
+      fi ;;
+  esac
+
+  size=$(wc -c < "$f" | tr -d ' ')
+  if [ "$size" -gt "$MAX_BYTES" ]; then
+    echo "ERRO: $f tem $size bytes (max 10 MB)"; fail=1
+  fi
+
+  # Conflict markers (text files only)
+  if grep -Iq . "$f" 2>/dev/null && grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "$f" >/dev/null 2>&1; then
+    echo "ERRO: marcadores de conflito em $f"; fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "Commit bloqueado pelo pre-commit."
+  exit 1
+fi
+exit 0
